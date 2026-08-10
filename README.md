@@ -5,9 +5,8 @@ Developer assessment. Monorepo with two apps:
 
 ```
 pyramid/
-├── backend/    NestJS + Prisma + PostgreSQL API
-├── frontend/   Next.js 14 (App Router) + Tailwind CSS
-└── docker-compose.yml   local Postgres for development
+├── backend/    NestJS + Prisma + MongoDB Atlas API
+└── frontend/   Next.js 14 (App Router) + Tailwind CSS
 ```
 
 ## Stack
@@ -16,15 +15,22 @@ pyramid/
 | ---------- | --------------------------------------------------- |
 | Frontend   | Next.js 14 (App Router), TypeScript, Tailwind CSS   |
 | Backend    | NestJS 10, TypeScript                                |
-| Database   | PostgreSQL via Prisma ORM                            |
+| Database   | MongoDB Atlas via Prisma ORM                         |
 | Auth       | JWT (guest sessions) + Google OAuth (Passport)       |
 | Data layer | @tanstack/react-query                                |
 | Drag & drop| @hello-pangea/dnd                                    |
 
-PostgreSQL + Prisma was chosen over the other allowed options because the
-domain (users → projects → tasks → subtasks/comments) is inherently
-relational, and Prisma's generated types keep the frontend and backend in
-sync with minimal boilerplate.
+MongoDB Atlas was chosen for its free, fully-managed hosted tier — no local
+database to install or separately deploy. Prisma still sits in front of it
+as the ORM, which is what makes this swap cheap: the generated **Client
+API** (`findMany`, `include`, nested `connect`/`set`, etc.) is identical
+regardless of provider, so `TasksService`, `ProjectsService`, `UsersService`,
+and `AuthService` didn't need a single line changed — only `schema.prisma`
+and the connection config did. See the comments at the top of
+`backend/prisma/schema.prisma` for exactly what's different about modeling
+this in MongoDB (mainly: no native join tables, so the one many-to-many
+relation — task assignees — uses Prisma's explicit array-of-ObjectId
+pattern instead of an implicit join table).
 
 ## Data model
 
@@ -46,22 +52,23 @@ inline comments explaining each modeling decision.
 
 ## Running locally
 
-**1. Database**
-
-```bash
-docker compose up -d          # starts Postgres on localhost:5432
-```
+**1. Database** — create a free MongoDB Atlas cluster and grab its
+connection string. No local install needed. Full walkthrough below.
 
 **2. Backend**
 
 ```bash
 cd backend
-cp .env.example .env          # defaults already match docker-compose
+cp .env.example .env          # paste your Atlas connection string into DATABASE_URL
 npm install
-npm run prisma:migrate        # creates tables
+npm run prisma:push           # syncs indexes/validation to your Atlas cluster
 npm run seed                  # optional demo data
 npm run start:dev             # http://localhost:4000/api
 ```
+
+`prisma db push` is the MongoDB equivalent of `prisma migrate` — Mongo is
+schemaless, so there's nothing to "migrate," but `db push` still needs to
+run once to create the unique indexes on `email`/`username`/`googleId`.
 
 **3. Frontend**
 
@@ -79,8 +86,8 @@ can't run with placeholder credentials.
 
 ## Deploying
 
-- **Database**: [Neon](https://neon.tech) or [Supabase](https://supabase.com) free tier — copy the connection string into `DATABASE_URL`.
-- **Backend**: [Render](https://render.com) or [Railway](https://railway.app) (Node web service). Set `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, and run `npm run prisma:deploy` as a release step.
+- **Database**: nothing extra to do — Atlas is already hosted. Just make sure Network Access allows connections from your backend host (see the setup walkthrough below).
+- **Backend**: [Render](https://render.com) or [Railway](https://railway.app) (Node web service). Set `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, and run `npm run prisma:push` as a release step.
 - **Frontend**: [Vercel](https://vercel.com) — set `NEXT_PUBLIC_API_URL` to the deployed backend's `/api` URL.
 
 ## Notable decisions / deviations from the Figma file
@@ -114,6 +121,20 @@ knowing before the interview:
   directly from the provided screenshots rather than guessed — notably,
   the "Blue" accent renders as a violet (`#9333ea`) in the source design,
   not literal blue, and that's preserved here for fidelity.
+- **Task assignees (many-to-many) use Prisma's explicit array-of-ObjectId
+  pattern** (`Task.assigneeIds` / `User.assignedTaskIds`) rather than an
+  implicit join table, since MongoDB has no native join tables — see the
+  note at the top of `schema.prisma`. The Prisma Client calls in
+  `tasks.service.ts` (`connect`/`set` on `assignees`) are unchanged from
+  the relational version; Prisma keeps both arrays in sync underneath.
+- **`User.email` and `User.googleId` are not `@unique`.** MongoDB can't
+  sparse-index an optional `@unique` field through Prisma (a real,
+  still-open Prisma limitation — see the note in `schema.prisma`), so the
+  first guest user created would permanently claim the "null" slot and
+  every guest after it would fail to sign up. PostgreSQL doesn't have this
+  problem since it treats every `NULL` as distinct, which is why this
+  didn't surface until after the MongoDB migration. `AuthService` enforces
+  unique linking by looking up existing users before creating instead.
 
 ## Project structure
 
@@ -138,9 +159,11 @@ frontend/
 
 ## Known gaps / next steps
 
-- `prisma generate` couldn't be run to completion in the sandbox this was
-  built in (its query-engine download is blocked by that sandbox's network
-  allowlist) — it will generate normally in any environment with regular
-  internet access; this is a sandbox limitation, not a schema issue.
+- `prisma generate` / `prisma db push` couldn't be run to completion in the
+  sandbox this was built in (Prisma's engine binaries are fetched from a
+  domain that sandbox's network allowlist blocks) — both will run normally
+  in any environment with regular internet access; this is a sandbox
+  limitation, not a schema issue. The schema syntax was reviewed by hand
+  against Prisma's documented MongoDB patterns instead.
 - No automated tests yet.
 - Google OAuth needs real credentials to actually authenticate (see above).

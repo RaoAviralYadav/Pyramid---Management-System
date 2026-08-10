@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Theming strategy (worth explaining in the interview):
+  - Base tokens (bg/fg/border/etc) depend only on [data-theme] — light or dark.
+  - Accent tokens depend only on [data-accent] — one of the 6 color modes.
+  - Both attributes live on <html>, set by Providers (see app/providers.tsx),
+    and are read back from localStorage by an inline script in the <head>
+    (app/layout.tsx) so there's no flash of the wrong theme on load.
+  - This is the same pattern shadcn/ui and next-themes use under the hood,
+    just hand-rolled here since we need a second axis (accent) that neither
+    of those tools model directly.
+
+  Colors were sampled directly from the provided screenshots (see the
+  color-extraction step) rather than guessed — e.g. "Blue" in the source
+  design actually renders as a violet (#9333ea), not literal blue, so
+  that's what's used here for fidelity to the Figma file.
+*/
+
+:root {
+  --radius: 0.625rem;
+}
+
+[data-theme='light'] {
+  --bg: #ffffff;
+  --bg-secondary: #fafafa;
+  --fg: #18181b;
+  --fg-muted: #71717a;
+  --border: #e4e4e7;
+  --card: #ffffff;
+  --hover: #f4f4f5;
+}
+
+[data-theme='dark'] {
+  --bg: #131314;
+  --bg-secondary: #1c1c1e;
+  --fg: #f4f4f5;
+  --fg-muted: #a1a1aa;
+  --border: #2c2c2e;
+  --card: #1c1c1e;
+  --hover: #232325;
+}
+
+[data-accent='amber'] {
+  --accent: #d97706;
+  --accent-foreground: #ffffff;
+  --accent-soft: #fef3c7;
+}
+[data-accent='blue'] {
+  --accent: #9333ea;
+  --accent-foreground: #ffffff;
+  --accent-soft: #f3e8ff;
+}
+[data-accent='pink'] {
+  --accent: #db2777;
+  --accent-foreground: #ffffff;
+  --accent-soft: #fce7f3;
+}
+[data-accent='rose'] {
+  --accent: #e11d48;
+  --accent-foreground: #ffffff;
+  --accent-soft: #ffe4e6;
+}
+[data-accent='emerald'] {
+  --accent: #059669;
+  --accent-foreground: #ffffff;
+  --accent-soft: #d1fae5;
+}
+[data-accent='black'] {
+  --accent: #18181b;
+  --accent-foreground: #ffffff;
+  --accent-soft: #e4e4e7;
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--fg);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 999px;
+  border: 2px solid var(--bg);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Visible keyboard focus everywhere — cheap and often skipped. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

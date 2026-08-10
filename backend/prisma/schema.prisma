@@ -1,0 +1,173 @@
+// Pyramid data model — MongoDB (via Prisma).
+//
+// Design notes (worth reading before the interview):
+// - MongoDB has no native join tables, so the one genuine many-to-many
+//   relation here (Task <-> User "assignees") is modeled with Prisma's
+//   explicit array-of-ObjectId pattern (assigneeIds / assignedTaskIds)
+//   instead of an implicit join table. Every other relation is an
+//   ordinary one-to-many with a foreign-key field on the "many" side
+//   (e.g. Task.projectId) — same shape as a relational schema, just with
+//   `@db.ObjectId` added since Mongo IDs are ObjectIds, not UUIDs.
+// - The Prisma CLIENT API (connect / set / disconnect, findMany, include,
+//   etc.) is identical regardless of provider — TasksService, ProjectsService,
+//   UsersService and AuthService needed ZERO changes when this schema moved
+//   from PostgreSQL to MongoDB. That's the actual payoff of going through
+//   an ORM instead of a raw driver.
+// - Task.labels stays a plain string array — MongoDB stores this natively.
+// - onDelete: Cascade / SetNull are enforced by Prisma Client at the
+//   application level here, not by the database — MongoDB has no FK
+//   constraints, so cascades only happen when they go through Prisma.
+
+// - MongoDB doesn't support sparse unique indexes through Prisma's schema
+//   attributes (a long-standing, still-open limitation — see
+//   github.com/prisma/prisma/issues/23870). A `@unique` on an optional
+//   field only allows ONE document to ever have that field be null/absent;
+//   every guest user after the first would collide on `googleId`/`email`.
+//   PostgreSQL doesn't have this problem (NULL != NULL there), which is
+//   why this only surfaced after the MongoDB migration. Fix: `email` and
+//   `googleId` are plain indexed fields, not unique ones — AuthService
+//   looks them up with `findFirst` instead of `findUnique` and checks for
+//   an existing match before creating, which is enough for this app's
+//   scale. `username` stays `@unique` since it's always populated.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum Theme {
+  LIGHT
+  DARK
+}
+
+enum AccentColor {
+  AMBER
+  BLUE
+  PINK
+  ROSE
+  EMERALD
+  BLACK
+}
+
+enum Priority {
+  NO_PRIORITY
+  URGENT
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum TaskStatus {
+  BACKLOG
+  TODO
+  DOING
+  ON_HOLD
+  COMPLETED
+}
+
+model User {
+  id          String      @id @default(auto()) @map("_id") @db.ObjectId
+  email       String?
+  googleId    String?
+  fullName    String?
+  title       String?
+  username    String?     @unique
+  avatarUrl   String?
+  isGuest     Boolean     @default(true)
+  theme       Theme       @default(LIGHT)
+  accentColor AccentColor @default(BLUE)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  ledProjects      Project[]      @relation("ProjectLead")
+  reportedTasks    Task[]         @relation("TaskReporter")
+  assignedTaskIds  String[]       @db.ObjectId
+  assignedTasks    Task[]         @relation("TaskAssignees", fields: [assignedTaskIds], references: [id])
+  assignedSubtasks Subtask[]      @relation("SubtaskAssignee")
+  comments         Comment[]
+  activities       TaskActivity[]
+
+  @@index([email])
+  @@index([googleId])
+}
+
+model Project {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  priority  Priority  @default(NO_PRIORITY)
+  dueDate   DateTime?
+  leadId    String?   @db.ObjectId
+  lead      User?     @relation("ProjectLead", fields: [leadId], references: [id], onDelete: SetNull)
+  tasks     Task[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Task {
+  id          String     @id @default(auto()) @map("_id") @db.ObjectId
+  title       String
+  description String?
+  status      TaskStatus @default(TODO)
+  priority    Priority   @default(NO_PRIORITY)
+  taskType    String? // e.g. "Designer" — the compact role chip shown under "Properties"
+  team        String?
+  labels      String[]   @default([])
+  startDate   DateTime?
+  dueDate     DateTime?
+
+  projectId String?  @db.ObjectId
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  reporterId String? @db.ObjectId
+  reporter   User?   @relation("TaskReporter", fields: [reporterId], references: [id], onDelete: SetNull)
+
+  assigneeIds String[] @db.ObjectId
+  assignees   User[]   @relation("TaskAssignees", fields: [assigneeIds], references: [id])
+
+  subtasks   Subtask[]
+  comments   Comment[]
+  activities TaskActivity[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([status])
+}
+
+model Subtask {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  taskId     String    @db.ObjectId
+  task       Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  title      String
+  priority   Priority  @default(NO_PRIORITY)
+  dueDate    DateTime?
+  assigneeId String?   @db.ObjectId
+  assignee   User?     @relation("SubtaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdAt  DateTime  @default(now())
+}
+
+model Comment {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  taskId    String   @db.ObjectId
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId  String   @db.ObjectId
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  content   String
+  createdAt DateTime @default(now())
+}
+
+// Backs the "Updates" activity feed on the task detail page.
+model TaskActivity {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  taskId    String   @db.ObjectId
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String?  @db.ObjectId
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  message   String
+  createdAt DateTime @default(now())
+}

@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/app/providers';
-import { Avatar } from '@/components/ui/primitives';
+import { Avatar, ConfirmDialog } from '@/components/ui/primitives';
+import { AvatarPickerModal } from '@/components/profile/avatar-picker-modal';
 import { api } from '@/lib/api';
 
 export default function ProfileSettingsPage() {
@@ -13,6 +14,9 @@ export default function ProfileSettingsPage() {
   const [title, setTitle] = useState(user?.title ?? '');
   const [username, setUsername] = useState(user?.username ?? '');
   const [leaving, setLeaving] = useState(false);
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [avatarSaving, setAvatarSaving] = useState(false);
 
   async function save(field: 'fullName' | 'title' | 'username', value: string) {
     if (!user) return;
@@ -20,8 +24,17 @@ export default function ProfileSettingsPage() {
     setUser(updated);
   }
 
+  async function handleAvatarSelect(dataUrl: string) {
+    setAvatarSaving(true);
+    try {
+      const updated = await api.updateProfile({ avatarUrl: dataUrl });
+      setUser(updated);
+    } finally {
+      setAvatarSaving(false);
+    }
+  }
+
   async function handleLeave() {
-    if (!confirm('Leave this workspace? This removes your access and cannot be undone.')) return;
     setLeaving(true);
     try {
       await api.leaveWorkspace();
@@ -29,6 +42,7 @@ export default function ProfileSettingsPage() {
       router.replace('/login');
     } finally {
       setLeaving(false);
+      setLeaveConfirmOpen(false);
     }
   }
 
@@ -40,7 +54,20 @@ export default function ProfileSettingsPage() {
 
       <div className="mt-6 rounded-2xl border border-border bg-card divide-y divide-border">
         <FieldRow label="Profile picture">
-          <Avatar user={user} size={40} />
+          <button
+            onClick={() => setPickerOpen(true)}
+            disabled={avatarSaving}
+            className="flex items-center gap-3 disabled:opacity-60"
+            aria-label="Change profile picture"
+          >
+            <span className="relative rounded-full group">
+              <Avatar user={user} size={40} />
+              <span className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <CameraIcon />
+              </span>
+            </span>
+            <span className="text-sm text-fg-muted hover:text-fg transition-colors">{avatarSaving ? 'Saving…' : 'Change'}</span>
+          </button>
         </FieldRow>
 
         <FieldRow label="Email">
@@ -84,13 +111,30 @@ export default function ProfileSettingsPage() {
       <div className="mt-3 rounded-2xl border border-border bg-card p-4 flex items-center justify-between">
         <p className="text-sm text-fg-muted">Remove yourself from the workspace</p>
         <button
-          onClick={handleLeave}
-          disabled={leaving}
-          className="h-9 px-3.5 rounded-lg bg-red-500/10 text-red-500 text-sm font-medium hover:bg-red-500/20 transition-colors disabled:opacity-50"
+          onClick={() => setLeaveConfirmOpen(true)}
+          className="h-9 px-3.5 rounded-lg bg-red-500/10 text-red-500 text-sm font-medium hover:bg-red-500/20 transition-colors"
         >
-          {leaving ? 'Leaving…' : 'Leave Workspace'}
+          Leave Workspace
         </button>
       </div>
+
+      <ConfirmDialog
+        open={leaveConfirmOpen}
+        onClose={() => setLeaveConfirmOpen(false)}
+        onConfirm={handleLeave}
+        title="Leave this workspace?"
+        description="This removes your access and cannot be undone."
+        confirmLabel="Leave Workspace"
+        danger
+        loading={leaving}
+      />
+
+      <AvatarPickerModal
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        currentAvatarUrl={user.avatarUrl}
+        onSelect={handleAvatarSelect}
+      />
     </div>
   );
 }
@@ -111,6 +155,15 @@ function PencilIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="text-fg-muted">
       <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+    </svg>
+  );
+}
+
+function CameraIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z" />
+      <circle cx="12" cy="13" r="3.5" />
     </svg>
   );
 }

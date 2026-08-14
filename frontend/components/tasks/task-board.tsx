@@ -9,7 +9,7 @@ import {
   type DraggableProvidedDraggableProps,
   type DropResult,
 } from '@hello-pangea/dnd';
-import { AvatarStack, LabelPill, PriorityTag } from '@/components/ui/primitives';
+import { Avatar, LabelPill, PriorityIcon, useInlineAdd } from '@/components/ui/primitives';
 import type { Task, TaskStatus } from '@/lib/types';
 import { STATUS_LABEL, formatShortDate, isOverdue } from '@/lib/utils';
 import type { VisibleFields } from './task-toolbar';
@@ -25,7 +25,7 @@ export function TaskBoard({
   tasks: Task[];
   visibleFields: VisibleFields;
   onMove: (taskId: string, status: TaskStatus) => void;
-  onAddTask: (status: TaskStatus) => void;
+  onAddTask: (status: TaskStatus, title: string) => void;
 }) {
   function handleDragEnd(result: DropResult) {
     const { destination, source, draggableId } = result;
@@ -43,7 +43,7 @@ export function TaskBoard({
             status={status}
             tasks={tasks.filter((t) => t.status === status)}
             visibleFields={visibleFields}
-            onAddTask={onAddTask}
+            onAddTask={(title) => onAddTask(status, title)}
           />
         ))}
       </div>
@@ -60,8 +60,10 @@ function Column({
   status: TaskStatus;
   tasks: Task[];
   visibleFields: VisibleFields;
-  onAddTask: (status: TaskStatus) => void;
+  onAddTask: (title: string) => void;
 }) {
+  const inlineAdd = useInlineAdd(onAddTask);
+
   return (
     <div className="flex flex-col w-72 shrink-0 h-full">
       <div className="flex items-center justify-between px-1 py-2">
@@ -71,13 +73,13 @@ function Column({
         </span>
         <div className="flex items-center gap-0.5">
           <button
-            onClick={() => onAddTask(status)}
-            className="h-6 w-6 flex items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg"
+            onClick={inlineAdd.start}
+            className="h-6 w-6 flex items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg transition-colors"
             aria-label={`Add task to ${STATUS_LABEL[status]}`}
           >
             <PlusIcon />
           </button>
-          <button className="h-6 w-6 flex items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg">
+          <button className="h-6 w-6 flex items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg transition-colors">
             <MoreIcon />
           </button>
         </div>
@@ -107,12 +109,17 @@ function Column({
               </Draggable>
             ))}
             {provided.placeholder}
-            <button
-              onClick={() => onAddTask(status)}
-              className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm text-fg-muted hover:bg-hover hover:text-fg transition-colors"
-            >
-              <PlusIcon /> Add Task
-            </button>
+
+            {inlineAdd.editing ? (
+              <input {...inlineAdd.inputProps} placeholder="Task title" className="w-full h-9 rounded-lg border border-accent bg-card px-2.5 text-sm text-fg placeholder:text-fg-muted focus:outline-none" />
+            ) : (
+              <button
+                onClick={inlineAdd.start}
+                className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm text-fg-muted hover:bg-hover hover:text-fg transition-colors"
+              >
+                <PlusIcon /> Add Task
+              </button>
+            )}
           </div>
         )}
       </Droppable>
@@ -137,6 +144,12 @@ function TaskCard({
 }) {
   const router = useRouter();
   const overdue = isOverdue(task.dueDate) && task.status !== 'COMPLETED';
+  const primaryAssignee = task.assignees[0];
+  // Mirrors the "[avatar] Designer" chip on the task detail page's
+  // Properties row — same two fields (assignee + taskType), just a more
+  // compact rendering suited to a card.
+  const identityLabel = task.taskType || primaryAssignee?.fullName || primaryAssignee?.username;
+  const showMetaRow = (visibleFields.members && (primaryAssignee || identityLabel)) || (visibleFields.dueDate && task.dueDate);
 
   return (
     <div
@@ -148,27 +161,50 @@ function TaskCard({
         dragging ? 'shadow-popover rotate-1' : ''
       }`}
     >
-      <p className="text-sm text-fg leading-snug">{task.title}</p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm text-fg leading-snug">{task.title}</p>
+        <button
+          onClick={(e) => e.stopPropagation()}
+          className="shrink-0 -mr-1 -mt-0.5 h-6 w-6 flex items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg transition-colors"
+          aria-label="Task options"
+        >
+          <MoreIcon />
+        </button>
+      </div>
+
+      {showMetaRow && (
+        <div className="mt-2 flex items-center justify-between gap-2">
+          {visibleFields.members && (primaryAssignee || identityLabel) ? (
+            <span className="inline-flex items-center gap-1.5 min-w-0 text-xs text-fg-muted">
+              {primaryAssignee && <Avatar user={primaryAssignee} size={20} />}
+              {identityLabel && <span className="truncate">{identityLabel}</span>}
+            </span>
+          ) : (
+            <span />
+          )}
+          <span className="inline-flex items-center gap-1.5 shrink-0">
+            {visibleFields.priority && task.priority !== 'NO_PRIORITY' && <PriorityIcon priority={task.priority} />}
+            {visibleFields.dueDate && task.dueDate && (
+              <span
+                className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full ${
+                  overdue ? 'bg-red-500/10 text-red-500' : 'bg-hover text-fg-muted'
+                }`}
+              >
+                <CalendarIcon />
+                {formatShortDate(task.dueDate)}
+              </span>
+            )}
+          </span>
+        </div>
+      )}
 
       {visibleFields.labels && task.labels.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-2">
-          {task.labels.slice(0, 2).map((l) => (
+          {task.labels.slice(0, 3).map((l) => (
             <LabelPill key={l} label={l} />
           ))}
         </div>
       )}
-
-      <div className="mt-2.5 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {visibleFields.priority && <PriorityTag priority={task.priority} showLabel={false} />}
-          {visibleFields.dueDate && task.dueDate && (
-            <span className={`text-xs px-1.5 py-0.5 rounded ${overdue ? 'bg-red-500/10 text-red-500' : 'text-fg-muted'}`}>
-              {formatShortDate(task.dueDate)}
-            </span>
-          )}
-        </div>
-        {visibleFields.members && <AvatarStack users={task.assignees} max={2} />}
-      </div>
     </div>
   );
 }
@@ -186,6 +222,14 @@ function MoreIcon() {
       <circle cx="12" cy="5" r="1.5" />
       <circle cx="12" cy="12" r="1.5" />
       <circle cx="12" cy="19" r="1.5" />
+    </svg>
+  );
+}
+function CalendarIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4M8 2v4M3 10h18" />
     </svg>
   );
 }

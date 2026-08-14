@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Avatar, AvatarStack, Popover, PopoverItem, PriorityIcon, PriorityTag, StatusDot, useClickOutside } from '@/components/ui/primitives';
+import { Avatar, AvatarStack, Popover, PopoverItem, PriorityIcon, PriorityTag, StatusDot, useClickOutside, useInlineAdd } from '@/components/ui/primitives';
 import type { Task } from '@/lib/types';
 import { PRIORITIES, TASK_STATUSES } from '@/lib/types';
 import { PRIORITY_LABEL, STATUS_LABEL, cn, formatDate } from '@/lib/utils';
@@ -244,6 +244,8 @@ export function SubtasksTable({ task }: { task: Task }) {
 
   const subtasks = task.subtasks ?? [];
 
+  const inlineAdd = useInlineAdd((title) => addSubtask.mutate(title));
+
   return (
     <div className="rounded-xl border border-border overflow-hidden">
       <div className="grid grid-cols-[1fr_auto_auto_auto] gap-4 px-4 py-2 text-xs font-medium text-fg-muted bg-bg-secondary">
@@ -262,15 +264,22 @@ export function SubtasksTable({ task }: { task: Task }) {
           <span className="w-20 text-fg-muted">{formatDate(s.dueDate) ?? '—'}</span>
         </div>
       ))}
-      <button
-        onClick={() => {
-          const title = prompt('Subtask title');
-          if (title?.trim()) addSubtask.mutate(title.trim());
-        }}
-        className="w-full flex items-center gap-2 px-4 py-2 border-t border-border text-sm text-fg-muted hover:bg-hover hover:text-fg transition-colors"
-      >
-        + Add Subtasks
-      </button>
+      {inlineAdd.editing ? (
+        <div className="px-4 py-2 border-t border-border">
+          <input
+            {...inlineAdd.inputProps}
+            placeholder="Subtask title"
+            className="w-full h-8 rounded-lg border border-accent bg-bg px-2.5 text-sm text-fg placeholder:text-fg-muted focus:outline-none"
+          />
+        </div>
+      ) : (
+        <button
+          onClick={inlineAdd.start}
+          className="w-full flex items-center gap-2 px-4 py-2 border-t border-border text-sm text-fg-muted hover:bg-hover hover:text-fg transition-colors"
+        >
+          + Add Subtasks
+        </button>
+      )}
     </div>
   );
 }

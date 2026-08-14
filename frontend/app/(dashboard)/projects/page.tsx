@@ -1,13 +1,15 @@
 'use client';
 
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Button } from '@/components/ui/primitives';
+import { Button, useClickOutside } from '@/components/ui/primitives';
 import { ProjectsTable } from '@/components/projects/projects-table';
 import type { Priority } from '@/lib/types';
 
 export default function ProjectsPage() {
   const queryClient = useQueryClient();
+  const [addOpen, setAddOpen] = useState(false);
   const { data: projects = [], isLoading } = useQuery({ queryKey: ['projects'], queryFn: () => api.projects.list() });
 
   const createProject = useMutation({
@@ -24,16 +26,16 @@ export default function ProjectsPage() {
     <div className="px-6 py-6">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-lg font-semibold text-fg">Projects</h1>
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => {
-            const name = prompt('Project name');
-            if (name?.trim()) createProject.mutate(name.trim());
-          }}
-        >
-          <PlusIcon /> Add Project
-        </Button>
+        <div className="relative">
+          <Button variant="primary" size="sm" onClick={() => setAddOpen(true)}>
+            <PlusIcon /> Add Project
+          </Button>
+          <AddProjectPopover
+            open={addOpen}
+            onClose={() => setAddOpen(false)}
+            onSubmit={(name) => createProject.mutate(name)}
+          />
+        </div>
       </div>
 
       {isLoading ? (
@@ -42,6 +44,45 @@ export default function ProjectsPage() {
         <ProjectsTable projects={projects} onPriorityChange={(id, priority) => updatePriority.mutate({ id, priority })} />
       )}
     </div>
+  );
+}
+
+function AddProjectPopover({ open, onClose, onSubmit }: { open: boolean; onClose: () => void; onSubmit: (name: string) => void }) {
+  const [name, setName] = useState('');
+  const ref = useClickOutside<HTMLFormElement>(onClose);
+
+  if (!open) return null;
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    onSubmit(name.trim());
+    setName('');
+    onClose();
+  }
+
+  return (
+    <form
+      ref={ref}
+      onSubmit={handleSubmit}
+      className="absolute right-0 top-[calc(100%+6px)] z-50 w-72 rounded-xl border border-border bg-card shadow-popover p-3"
+    >
+      <input
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Project name"
+        className="w-full h-9 rounded-lg border border-border bg-bg px-3 text-sm text-fg placeholder:text-fg-muted focus:outline-none focus:ring-2 focus:ring-accent/40"
+      />
+      <div className="mt-2 flex justify-end gap-2">
+        <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button type="submit" variant="primary" size="sm">
+          Add Project
+        </Button>
+      </div>
+    </form>
   );
 }
 

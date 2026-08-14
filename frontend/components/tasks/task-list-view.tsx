@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { AvatarStack, LabelPill, PriorityTag } from '@/components/ui/primitives';
+import { AvatarStack, LabelPill, PriorityTag, useInlineAdd } from '@/components/ui/primitives';
 import type { Task, TaskStatus } from '@/lib/types';
 import { STATUS_LABEL, formatShortDate, isOverdue } from '@/lib/utils';
 import type { VisibleFields } from './task-toolbar';
@@ -16,7 +16,7 @@ export function TaskListView({
 }: {
   tasks: Task[];
   visibleFields: VisibleFields;
-  onAddTask: (status: TaskStatus) => void;
+  onAddTask: (status: TaskStatus, title: string) => void;
 }) {
   const groups = ORDER.map((status) => ({ status, tasks: tasks.filter((t) => t.status === status) })).filter(
     (g) => g.tasks.length > 0,
@@ -29,7 +29,13 @@ export function TaskListView({
   return (
     <div className="flex flex-col gap-6 py-4">
       {groups.map((g) => (
-        <StatusGroup key={g.status} status={g.status} tasks={g.tasks} visibleFields={visibleFields} onAddTask={onAddTask} />
+        <StatusGroup
+          key={g.status}
+          status={g.status}
+          tasks={g.tasks}
+          visibleFields={visibleFields}
+          onAddTask={(title) => onAddTask(g.status, title)}
+        />
       ))}
     </div>
   );
@@ -44,10 +50,11 @@ function StatusGroup({
   status: TaskStatus;
   tasks: Task[];
   visibleFields: VisibleFields;
-  onAddTask: (status: TaskStatus) => void;
+  onAddTask: (title: string) => void;
 }) {
   const [open, setOpen] = useState(true);
   const router = useRouter();
+  const inlineAdd = useInlineAdd(onAddTask);
 
   return (
     <div>
@@ -107,12 +114,22 @@ function StatusGroup({
               </div>
             </div>
           ))}
-          <button
-            onClick={() => onAddTask(status)}
-            className="w-full flex items-center gap-2 px-4 py-2.5 border-t border-border text-sm text-fg-muted hover:bg-hover hover:text-fg transition-colors"
-          >
-            <PlusIcon /> Add Task
-          </button>
+          {inlineAdd.editing ? (
+            <div className="px-4 py-2 border-t border-border">
+              <input
+                {...inlineAdd.inputProps}
+                placeholder="Task title"
+                className="w-full h-8 rounded-lg border border-accent bg-bg px-2.5 text-sm text-fg placeholder:text-fg-muted focus:outline-none"
+              />
+            </div>
+          ) : (
+            <button
+              onClick={inlineAdd.start}
+              className="w-full flex items-center gap-2 px-4 py-2.5 border-t border-border text-sm text-fg-muted hover:bg-hover hover:text-fg transition-colors"
+            >
+              <PlusIcon /> Add Task
+            </button>
+          )}
         </div>
       )}
     </div>

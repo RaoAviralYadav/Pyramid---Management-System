@@ -16,7 +16,7 @@ export default function ProjectDetailPage() {
   const [view, setView] = useState<'list' | 'board'>('list');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<TaskStatus[]>([]);
-  const [visibleFields, setVisibleFields] = useState<VisibleFields>({ priority: true, members: true, dueDate: true, labels: false });
+  const [visibleFields, setVisibleFields] = useState<VisibleFields>({ priority: true, members: true, dueDate: true, labels: true });
 
   const { data: project } = useQuery({ queryKey: ['project', params.projectId], queryFn: () => api.projects.get(params.projectId) });
   const { data: tasks = [], isLoading } = useQuery({
@@ -77,20 +77,14 @@ export default function ProjectDetailPage() {
           <TaskListView
             tasks={filtered}
             visibleFields={visibleFields}
-            onAddTask={(status) => {
-              const title = prompt('Task title');
-              if (title?.trim()) createTask.mutate({ title: title.trim(), status });
-            }}
+            onAddTask={(status, title) => createTask.mutate({ title, status })}
           />
         ) : (
           <TaskBoard
             tasks={filtered}
             visibleFields={visibleFields}
             onMove={(id, status) => moveTask.mutate({ id, status })}
-            onAddTask={(status) => {
-              const title = prompt('Task title');
-              if (title?.trim()) createTask.mutate({ title: title.trim(), status });
-            }}
+            onAddTask={(status, title) => createTask.mutate({ title, status })}
           />
         )}
       </div>

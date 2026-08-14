@@ -17,7 +17,7 @@ export default function TasksPage() {
     priority: true,
     members: true,
     dueDate: true,
-    labels: false,
+    labels: true,
   });
 
   const { data: tasks = [], isLoading } = useQuery({
@@ -75,20 +75,14 @@ export default function TasksPage() {
           <TaskListView
             tasks={filtered}
             visibleFields={visibleFields}
-            onAddTask={(status) => {
-              const title = prompt('Task title');
-              if (title?.trim()) createTask.mutate({ title: title.trim(), status });
-            }}
+            onAddTask={(status, title) => createTask.mutate({ title, status })}
           />
         ) : (
           <TaskBoard
             tasks={filtered}
             visibleFields={visibleFields}
             onMove={(id, status) => moveTask.mutate({ id, status })}
-            onAddTask={(status) => {
-              const title = prompt('Task title');
-              if (title?.trim()) createTask.mutate({ title: title.trim(), status });
-            }}
+            onAddTask={(status, title) => createTask.mutate({ title, status })}
           />
         )}
       </div>

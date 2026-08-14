@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { cn, initials, avatarGradient, PRIORITY_LABEL } from '@/lib/utils';
 import type { Priority, User } from '@/lib/types';
 
@@ -245,11 +245,134 @@ export function Divider() {
   return <div className="my-1.5 h-px bg-border" />;
 }
 
+/* ----------------------------------- Modal ----------------------------------- */
+
+export function Modal({
+  open,
+  onClose,
+  title,
+  children,
+  className,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title?: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className={cn('relative z-10 w-full max-w-md rounded-2xl border border-border bg-card shadow-popover max-h-[90vh] overflow-y-auto', className)}>
+        {title && (
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border sticky top-0 bg-card">
+            <h2 className="text-sm font-semibold text-fg">{title}</h2>
+            <button onClick={onClose} className="h-7 w-7 flex items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg transition-colors">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        )}
+        <div className="p-5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 export function Checkbox({ checked, onChange, label }: { checked: boolean; onChange: () => void; label: string }) {
   return (
     <label className="flex items-center justify-between gap-3 px-3 py-1.5 text-sm cursor-pointer hover:bg-hover">
       <span>{label}</span>
       <input type="checkbox" checked={checked} onChange={onChange} className="accent-accent h-3.5 w-3.5" />
     </label>
+  );
+}
+
+/* -------------------------------- Inline add -------------------------------- */
+
+// Shared behavior behind every "+ Add X" row that used to be a browser
+// prompt() — toggles between a trigger and an autofocused input, Enter
+// submits, Escape cancels, and blurring with unsaved text submits it rather
+// than silently discarding it. Kept as a hook (not a wrapping component)
+// because the three places that use it — board columns, list-view groups,
+// the subtasks table — each need different surrounding markup, but the
+// state logic itself is identical.
+export function useInlineAdd(onSubmit: (value: string) => void) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState('');
+
+  function start() {
+    setEditing(true);
+  }
+  function cancel() {
+    setValue('');
+    setEditing(false);
+  }
+  function submit() {
+    const trimmed = value.trim();
+    setValue('');
+    setEditing(false);
+    if (trimmed) onSubmit(trimmed);
+  }
+
+  const inputProps = {
+    autoFocus: true,
+    value,
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => setValue(e.target.value),
+    onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') submit();
+      if (e.key === 'Escape') cancel();
+    },
+    onBlur: () => (value.trim() ? submit() : cancel()),
+  };
+
+  return { editing, start, cancel, submit, inputProps };
+}
+
+/* -------------------------------- Confirm dialog ------------------------------ */
+
+export function ConfirmDialog({
+  open,
+  onClose,
+  onConfirm,
+  title,
+  description,
+  confirmLabel = 'Confirm',
+  danger = false,
+  loading = false,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  description?: string;
+  confirmLabel?: string;
+  danger?: boolean;
+  loading?: boolean;
+}) {
+  return (
+    <Modal open={open} onClose={onClose} title={title} className="max-w-sm">
+      {description && <p className="text-sm text-fg-muted">{description}</p>}
+      <div className="mt-5 flex justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button variant={danger ? 'danger' : 'primary'} size="sm" onClick={onConfirm} disabled={loading}>
+          {loading ? 'Please wait…' : confirmLabel}
+        </Button>
+      </div>
+    </Modal>
   );
 }

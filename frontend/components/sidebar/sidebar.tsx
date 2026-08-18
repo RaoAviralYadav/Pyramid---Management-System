@@ -18,7 +18,15 @@ const ACCENT_SWATCH: Record<string, string> = {
   black: '#18181b',
 };
 
-export function Sidebar({ mobileOpen, onCloseMobile }: { mobileOpen: boolean; onCloseMobile: () => void }) {
+export function Sidebar({
+  mobileOpen,
+  onCloseMobile,
+  collapsed,
+}: {
+  mobileOpen: boolean;
+  onCloseMobile: () => void;
+  collapsed: boolean;
+}) {
   const pathname = usePathname();
   const isSettings = pathname?.startsWith('/settings');
 
@@ -27,11 +35,16 @@ export function Sidebar({ mobileOpen, onCloseMobile }: { mobileOpen: boolean; on
       {mobileOpen && <div className="fixed inset-0 z-30 bg-black/30 lg:hidden" onClick={onCloseMobile} />}
       <aside
         className={cn(
-          'fixed lg:static inset-y-0 left-0 z-40 w-64 shrink-0 border-r border-border bg-bg flex flex-col transition-transform duration-200 lg:translate-x-0',
-          mobileOpen ? 'translate-x-0' : '-translate-x-full',
+          'fixed lg:static inset-y-0 left-0 z-40 w-64 shrink-0 border-r border-border bg-bg transition-all duration-200 overflow-hidden',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
+          collapsed && 'lg:w-0 lg:border-r-0',
         )}
       >
-        {isSettings ? <SettingsNav onNavigate={onCloseMobile} /> : <WorkspaceNav onNavigate={onCloseMobile} />}
+        {/* Fixed-width inner wrapper so content doesn't reflow/squish while
+            the outer <aside> animates its width to 0 on collapse. */}
+        <div className="w-64 h-full flex flex-col">
+          {isSettings ? <SettingsNav onNavigate={onCloseMobile} /> : <WorkspaceNav onNavigate={onCloseMobile} />}
+        </div>
       </aside>
     </>
   );

@@ -42,6 +42,7 @@ export interface Comment {
   authorId: string;
   author: User;
   content: string;
+  reactions: string[];
   createdAt: string;
 }
 
@@ -61,6 +62,7 @@ export interface Task {
   taskType?: string | null;
   team?: string | null;
   labels: string[];
+  resources: string[];
   startDate?: string | null;
   dueDate?: string | null;
   projectId?: string | null;

@@ -3,8 +3,19 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Avatar, AvatarStack, Popover, PopoverItem, PriorityIcon, PriorityTag, StatusDot, useClickOutside, useInlineAdd } from '@/components/ui/primitives';
-import type { Task } from '@/lib/types';
+import {
+  Avatar,
+  AvatarStack,
+  ConfirmDialog,
+  Popover,
+  PopoverItem,
+  PriorityIcon,
+  PriorityTag,
+  StatusDot,
+  useClickOutside,
+  useInlineAdd,
+} from '@/components/ui/primitives';
+import type { Comment, Subtask, Task } from '@/lib/types';
 import { PRIORITIES, TASK_STATUSES } from '@/lib/types';
 import { PRIORITY_LABEL, STATUS_LABEL, cn, formatDate } from '@/lib/utils';
 
@@ -52,11 +63,17 @@ export function DetailsPanel({ task, onUpdate }: { task: Task; onUpdate: (data: 
       </FieldRow>
 
       <FieldRow label="Members">
+        {/* right-0, not left-0: this panel is only ~320px wide, and a
+            left-anchored popover this size pushes past the panel's right
+            edge, which the panel's own overflow-y-auto then clips
+            (browsers compute overflow-x as auto too once overflow-y is
+            non-visible — see the note on DatesPopover below for the fuller
+            version of this bug). Anchoring from the right keeps it inside. */}
         <div className="relative">
           <TriggerButton onClick={() => setOpen(open === 'members' ? null : 'members')}>
             {task.assignees.length ? <AvatarStack users={task.assignees} max={3} /> : <span className="text-fg-muted">Add members</span>}
           </TriggerButton>
-          <Popover open={open === 'members'} onClose={() => setOpen(null)} anchorClassName="left-0 top-[calc(100%+4px)] w-52">
+          <Popover open={open === 'members'} onClose={() => setOpen(null)} anchorClassName="right-0 top-[calc(100%+4px)] w-52">
             {users.map((u) => {
               const active = task.assignees.some((a) => a.id === u.id);
               return (
@@ -186,7 +203,17 @@ function DatesPopover({
   }
 
   return (
-    <div ref={ref} className="absolute left-0 top-[calc(100%+4px)] z-50 w-64 rounded-xl border border-border bg-card shadow-popover p-3">
+    // FIX: was `left-0`, which anchors to the (narrow) trigger button's own
+    // box. The Details panel is ~320px wide and the trigger sits ~108px in
+    // from its left edge (after the "Dates" label + gap), so a 256px-wide
+    // (w-64) calendar anchored left-0 extended ~60px past the panel's right
+    // boundary — and the panel's overflow-y-auto clips X overflow too (per
+    // spec, overflow-x computes to auto once overflow-y isn't visible), so
+    // that overhanging part was rendered but unclickable. `right-0` anchors
+    // the popover's right edge to the trigger's right edge instead, which
+    // sits almost exactly at the panel's own safe boundary, so it now grows
+    // leftward into space that's actually available.
+    <div ref={ref} className="absolute right-0 top-[calc(100%+4px)] z-50 w-64 rounded-xl border border-border bg-card shadow-popover p-3">
       <div className="flex rounded-lg bg-hover p-0.5 mb-3">
         <button onClick={() => setPicking('start')} className={cn('flex-1 h-7 rounded-md text-xs font-medium', picking === 'start' ? 'bg-card shadow-sm text-fg' : 'text-fg-muted')}>
           Start
@@ -237,32 +264,34 @@ function DatesPopover({
 
 export function SubtasksTable({ task }: { task: Task }) {
   const queryClient = useQueryClient();
+  const [deleting, setDeleting] = useState<Subtask | null>(null);
+
   const addSubtask = useMutation({
     mutationFn: (title: string) => api.tasks.addSubtask(task.id, { title }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['task', task.id] }),
   });
+  const removeSubtask = useMutation({
+    mutationFn: (id: string) => api.subtasks.remove(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['task', task.id] });
+      setDeleting(null);
+    },
+  });
 
   const subtasks = task.subtasks ?? [];
-
   const inlineAdd = useInlineAdd((title) => addSubtask.mutate(title));
 
   return (
     <div className="rounded-xl border border-border overflow-hidden">
-      <div className="grid grid-cols-[1fr_auto_auto_auto] gap-4 px-4 py-2 text-xs font-medium text-fg-muted bg-bg-secondary">
+      <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-4 px-4 py-2 text-xs font-medium text-fg-muted bg-bg-secondary">
         <span>Task</span>
         <span className="w-20">Priority</span>
         <span className="w-16">Members</span>
         <span className="w-20">Due Date</span>
+        <span className="w-8" />
       </div>
       {subtasks.map((s) => (
-        <div key={s.id} className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 px-4 py-2 border-t border-border text-sm">
-          <span className="text-fg truncate">{s.title}</span>
-          <div className="w-20">
-            <PriorityTag priority={s.priority} />
-          </div>
-          <div className="w-16">{s.assignee ? <Avatar user={s.assignee} size={22} /> : <span className="text-fg-muted">—</span>}</div>
-          <span className="w-20 text-fg-muted">{formatDate(s.dueDate) ?? '—'}</span>
-        </div>
+        <SubtaskRow key={s.id} taskId={task.id} subtask={s} onDelete={() => setDeleting(s)} />
       ))}
       {inlineAdd.editing ? (
         <div className="px-4 py-2 border-t border-border">
@@ -280,11 +309,60 @@ export function SubtasksTable({ task }: { task: Task }) {
           + Add Subtasks
         </button>
       )}
+
+      <ConfirmDialog
+        open={!!deleting}
+        onClose={() => setDeleting(null)}
+        onConfirm={() => deleting && removeSubtask.mutate(deleting.id)}
+        title="Delete this subtask?"
+        description={deleting ? `"${deleting.title}" will be permanently deleted.` : undefined}
+        confirmLabel="Delete"
+        danger
+        loading={removeSubtask.isPending}
+      />
+    </div>
+  );
+}
+
+function SubtaskRow({ taskId, subtask, onDelete }: { taskId: string; subtask: Subtask; onDelete: () => void }) {
+  const queryClient = useQueryClient();
+  const updateSubtask = useMutation({
+    mutationFn: (title: string) => api.subtasks.update(subtask.id, { title }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['task', taskId] }),
+  });
+  const inlineEdit = useInlineAdd((title) => updateSubtask.mutate(title), subtask.title);
+
+  return (
+    <div className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-4 px-4 py-2 border-t border-border text-sm group">
+      {inlineEdit.editing ? (
+        <input
+          {...inlineEdit.inputProps}
+          className="h-7 rounded-md border border-accent bg-bg px-2 text-sm text-fg focus:outline-none"
+        />
+      ) : (
+        <button onClick={inlineEdit.start} className="text-fg truncate text-left hover:bg-hover rounded-md px-1.5 -ml-1.5 h-7">
+          {subtask.title}
+        </button>
+      )}
+      <div className="w-20">
+        <PriorityTag priority={subtask.priority} />
+      </div>
+      <div className="w-16">{subtask.assignee ? <Avatar user={subtask.assignee} size={22} /> : <span className="text-fg-muted">—</span>}</div>
+      <span className="w-20 text-fg-muted">{formatDate(subtask.dueDate) ?? '—'}</span>
+      <button
+        onClick={onDelete}
+        className="w-8 h-7 flex items-center justify-center rounded-md text-fg-muted opacity-0 group-hover:opacity-100 hover:bg-hover hover:text-red-500 transition-opacity"
+        aria-label="Delete subtask"
+      >
+        <TrashIcon />
+      </button>
     </div>
   );
 }
 
 /* --------------------------------- Comments --------------------------------- */
+
+const QUICK_EMOJIS = ['👍', '❤️', '🎉', '😂', '👀', '🚀', '✅', '😕'];
 
 export function CommentsThread({ task }: { task: Task }) {
   const queryClient = useQueryClient();
@@ -300,16 +378,7 @@ export function CommentsThread({ task }: { task: Task }) {
   return (
     <div className="flex flex-col gap-4">
       {(task.comments ?? []).map((c) => (
-        <div key={c.id} className="flex items-start gap-2.5">
-          <Avatar user={c.author} size={28} />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm">
-              <span className="font-medium text-fg">{c.author.fullName || c.author.username}</span>{' '}
-              <span className="text-xs text-fg-muted">{new Date(c.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-            </p>
-            <p className="text-sm text-fg-muted mt-0.5">{c.content}</p>
-          </div>
-        </div>
+        <CommentRow key={c.id} taskId={task.id} comment={c} />
       ))}
 
       <form
@@ -329,6 +398,76 @@ export function CommentsThread({ task }: { task: Task }) {
           <SendIcon />
         </button>
       </form>
+    </div>
+  );
+}
+
+function CommentRow({ taskId, comment }: { taskId: string; comment: Comment }) {
+  const queryClient = useQueryClient();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useClickOutside<HTMLDivElement>(() => setPickerOpen(false));
+
+  const react = useMutation({
+    mutationFn: (emoji: string) => api.comments.react(comment.id, emoji),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['task', taskId] }),
+  });
+
+  const grouped = comment.reactions.reduce<Record<string, number>>((acc, emoji) => {
+    acc[emoji] = (acc[emoji] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  return (
+    <div className="flex items-start gap-2.5 group/comment">
+      <Avatar user={comment.author} size={28} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <p className="text-sm">
+            <span className="font-medium text-fg">{comment.author.fullName || comment.author.username}</span>{' '}
+            <span className="text-xs text-fg-muted">{new Date(comment.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+          </p>
+          <div className="relative opacity-0 group-hover/comment:opacity-100 focus-within:opacity-100 transition-opacity">
+            <button
+              onClick={() => setPickerOpen((o) => !o)}
+              className="h-6 w-6 flex items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg"
+              aria-label="Add reaction"
+            >
+              <SmileIcon />
+            </button>
+            {pickerOpen && (
+              <div ref={pickerRef} className="absolute left-0 top-[calc(100%+4px)] z-50 flex flex-wrap gap-0.5 w-40 rounded-xl border border-border bg-card shadow-popover p-1.5">
+                {QUICK_EMOJIS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    onClick={() => {
+                      react.mutate(emoji);
+                      setPickerOpen(false);
+                    }}
+                    className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-hover text-base"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <p className="text-sm text-fg-muted mt-0.5">{comment.content}</p>
+        {Object.keys(grouped).length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {Object.entries(grouped).map(([emoji, count]) => (
+              <button
+                key={emoji}
+                onClick={() => react.mutate(emoji)}
+                className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs hover:bg-hover transition-colors"
+              >
+                <span>{emoji}</span>
+                <span className="text-fg-muted">{count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -353,6 +492,21 @@ function SendIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <path d="m22 2-7 20-4-9-9-4Z" />
       <path d="M22 2 11 13" />
+    </svg>
+  );
+}
+function SmileIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01" />
+    </svg>
+  );
+}
+function TrashIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16Z" />
     </svg>
   );
 }

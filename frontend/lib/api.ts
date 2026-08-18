@@ -76,4 +76,8 @@ export const api = {
       request(`/subtasks/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remove: (id: string) => request<void>(`/subtasks/${id}`, { method: 'DELETE' }),
   },
+
+  comments: {
+    react: (id: string, emoji: string) => request(`/comments/${id}/react`, { method: 'POST', body: JSON.stringify({ emoji }) }),
+  },
 };

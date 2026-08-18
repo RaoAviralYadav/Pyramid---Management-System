@@ -309,22 +309,24 @@ export function Checkbox({ checked, onChange, label }: { checked: boolean; onCha
 // because the three places that use it — board columns, list-view groups,
 // the subtasks table — each need different surrounding markup, but the
 // state logic itself is identical.
-export function useInlineAdd(onSubmit: (value: string) => void) {
+export function useInlineAdd(onSubmit: (value: string) => void, initialValue = '') {
   const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState('');
+  const [value, setValue] = useState(initialValue);
 
   function start() {
+    setValue(initialValue);
     setEditing(true);
   }
   function cancel() {
-    setValue('');
+    setValue(initialValue);
     setEditing(false);
   }
   function submit() {
     const trimmed = value.trim();
-    setValue('');
     setEditing(false);
-    if (trimmed) onSubmit(trimmed);
+    // Skip the round-trip if nothing actually changed (matters for the
+    // inline-edit case — blurring an unedited field shouldn't PATCH).
+    if (trimmed && trimmed !== initialValue) onSubmit(trimmed);
   }
 
   const inputProps = {

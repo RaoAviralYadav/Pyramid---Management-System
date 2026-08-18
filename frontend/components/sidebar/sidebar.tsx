@@ -35,7 +35,9 @@ export function Sidebar({
       {mobileOpen && <div className="fixed inset-0 z-30 bg-black/30 lg:hidden" onClick={onCloseMobile} />}
       <aside
         className={cn(
-          'fixed lg:static inset-y-0 left-0 z-40 w-64 shrink-0 border-r border-border bg-bg transition-all duration-200 overflow-hidden',
+          'fixed lg:static inset-y-0 left-0 z-40 w-64 shrink-0 border-r border-border bg-bg transition-all duration-200',
+          // allow popovers to overflow the sidebar so their submenus render above page content
+          collapsed ? 'overflow-hidden' : 'overflow-visible',
           mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
           collapsed && 'lg:w-0 lg:border-r-0',
         )}

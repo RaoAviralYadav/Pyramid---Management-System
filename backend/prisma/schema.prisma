@@ -116,6 +116,10 @@ model Task {
   taskType    String? // e.g. "Designer" — the compact role chip shown under "Properties"
   team        String?
   labels      String[]   @default([])
+  // Plain URLs — display label (e.g. "github.com") is derived client-side
+  // from the hostname rather than stored, so there's no separate label
+  // field to keep in sync.
+  resources   String[]   @default([])
   startDate   DateTime?
   dueDate     DateTime?
 
@@ -158,6 +162,12 @@ model Comment {
   authorId  String   @db.ObjectId
   author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   content   String
+  // Flat list of emoji characters, e.g. ["👍","👍","🎉"] — additive only,
+  // no per-user tracking of who reacted or toggle-off-your-own-reaction.
+  // A fuller version would model this as its own collection keyed by
+  // (commentId, userId, emoji) to support that; kept simple here since
+  // it's a small piece of a much larger request.
+  reactions String[] @default([])
   createdAt DateTime @default(now())
 }
 

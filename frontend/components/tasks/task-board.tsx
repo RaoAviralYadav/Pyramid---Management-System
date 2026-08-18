@@ -66,8 +66,9 @@ function Column({
   const inlineAdd = useInlineAdd(onAddTask);
 
   return (
-    <div className="flex flex-col w-72 shrink-0 h-full">
-      <div className="flex items-center justify-between px-1 py-2">
+    <div className="flex flex-col w-72 shrink-0">
+      <div className="rounded-xl border border-border bg-bg-secondary p-3 flex flex-col">
+        <div className="flex items-center justify-between mb-2">
         <span className="text-sm font-medium text-fg flex items-center gap-1.5">
           {STATUS_LABEL[status]}
           <span className="text-fg-muted font-normal">{tasks.length}</span>
@@ -84,14 +85,14 @@ function Column({
             <MoreIcon />
           </button>
         </div>
-      </div>
+        </div>
 
-      <Droppable droppableId={status}>
+        <Droppable droppableId={status}>
         {(provided, snapshot) => (
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
-            className={`flex-1 min-h-[80px] rounded-xl p-1.5 flex flex-col gap-2 overflow-y-auto transition-colors ${
+            className={`min-h-[80px] max-h-[60vh] p-1.5 flex flex-col gap-2 overflow-y-auto transition-colors ${
               snapshot.isDraggingOver ? 'bg-accent-soft/40' : ''
             }`}
           >
@@ -124,6 +125,7 @@ function Column({
           </div>
         )}
       </Droppable>
+      </div>
     </div>
   );
 }

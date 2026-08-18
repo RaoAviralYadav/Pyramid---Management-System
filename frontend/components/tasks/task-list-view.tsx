@@ -3,6 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { AvatarStack, LabelPill, PriorityTag, useInlineAdd } from '@/components/ui/primitives';
+import { MembersPicker } from './members-picker';
+import { TaskActionsMenu } from './task-actions-menu';
 import type { Task, TaskStatus } from '@/lib/types';
 import { STATUS_LABEL, formatShortDate, isOverdue } from '@/lib/utils';
 import type { VisibleFields } from './task-toolbar';
@@ -96,7 +98,18 @@ function StatusGroup({
               )}
               {visibleFields.members && (
                 <div className="w-20">
-                  <AvatarStack users={task.assignees} max={2} />
+                  <MembersPicker
+                    task={task}
+                    trigger={
+                      task.assignees.length > 0 ? (
+                        <AvatarStack users={task.assignees} max={2} />
+                      ) : (
+                        <span className="h-6 w-6 rounded-full border border-dashed border-fg-muted text-fg-muted flex items-center justify-center hover:border-fg hover:text-fg transition-colors">
+                          <PlusIcon />
+                        </span>
+                      )
+                    }
+                  />
                 </div>
               )}
               {visibleFields.dueDate && (
@@ -105,12 +118,7 @@ function StatusGroup({
                 </div>
               )}
               <div className="w-8 flex justify-end">
-                <button
-                  onClick={(e) => e.stopPropagation()}
-                  className="h-7 w-7 flex items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg"
-                >
-                  <MoreIcon />
-                </button>
+                <TaskActionsMenu task={task} />
               </div>
             </div>
           ))}
@@ -166,15 +174,6 @@ function PlusIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
       <path d="M12 5v14M5 12h14" />
-    </svg>
-  );
-}
-function MoreIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-      <circle cx="12" cy="5" r="1.5" />
-      <circle cx="12" cy="12" r="1.5" />
-      <circle cx="12" cy="19" r="1.5" />
     </svg>
   );
 }

@@ -10,6 +10,7 @@ import {
   type DropResult,
 } from '@hello-pangea/dnd';
 import { Avatar, LabelPill, PriorityIcon, useInlineAdd } from '@/components/ui/primitives';
+import { TaskActionsMenu } from './task-actions-menu';
 import type { Task, TaskStatus } from '@/lib/types';
 import { STATUS_LABEL, formatShortDate, isOverdue } from '@/lib/utils';
 import type { VisibleFields } from './task-toolbar';
@@ -163,13 +164,7 @@ function TaskCard({
     >
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm text-fg leading-snug">{task.title}</p>
-        <button
-          onClick={(e) => e.stopPropagation()}
-          className="shrink-0 -mr-1 -mt-0.5 h-6 w-6 flex items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg transition-colors"
-          aria-label="Task options"
-        >
-          <MoreIcon />
-        </button>
+        <TaskActionsMenu task={task} className="shrink-0 -mr-1 -mt-0.5" />
       </div>
 
       {showMetaRow && (

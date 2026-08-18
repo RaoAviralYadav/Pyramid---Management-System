@@ -10,7 +10,7 @@ import { TaskBoard } from '@/components/tasks/task-board';
 
 export default function TasksPage() {
   const queryClient = useQueryClient();
-  const [view, setView] = useState<'list' | 'board'>('list');
+  const [view, setView] = useState<'list' | 'board'>('board');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<TaskStatus[]>([]);
   const [visibleFields, setVisibleFields] = useState<VisibleFields>({

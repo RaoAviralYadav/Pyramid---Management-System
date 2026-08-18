@@ -4,7 +4,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { TasksService } from './tasks.service';
 import { CreateTaskDto, QueryTaskDto, UpdateTaskDto } from './dto/task.dto';
 import { CreateSubtaskDto, UpdateSubtaskDto } from './dto/subtask.dto';
-import { CreateCommentDto } from './dto/comment.dto';
+import { CreateCommentDto, ReactDto } from './dto/comment.dto';
 import type { User } from '@prisma/client';
 
 @Controller()
@@ -55,5 +55,10 @@ export class TasksController {
   @Post('tasks/:id/comments')
   addComment(@Param('id') id: string, @Body() dto: CreateCommentDto, @CurrentUser() user: User) {
     return this.service.addComment(id, dto, user.id);
+  }
+
+  @Post('comments/:id/react')
+  reactToComment(@Param('id') id: string, @Body() dto: ReactDto) {
+    return this.service.reactToComment(id, dto.emoji);
   }
 }

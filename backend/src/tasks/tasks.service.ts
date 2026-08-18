@@ -45,13 +45,17 @@ export class TasksService {
 
   create(dto: CreateTaskDto, userId: string) {
     const { assigneeIds, dueDate, startDate, ...rest } = dto;
+    // Every card in the reference design shows an assignee — default to
+    // whoever created the task rather than leaving it blank; they can
+    // always reassign it from the Details panel afterward.
+    const finalAssigneeIds = assigneeIds && assigneeIds.length > 0 ? assigneeIds : [userId];
     return this.prisma.task.create({
       data: {
         ...rest,
         dueDate: dueDate ? new Date(dueDate) : undefined,
         startDate: startDate ? new Date(startDate) : undefined,
         reporterId: userId,
-        assignees: assigneeIds ? { connect: assigneeIds.map((id) => ({ id })) } : undefined,
+        assignees: { connect: finalAssigneeIds.map((id) => ({ id })) },
       },
       include: taskDetailInclude,
     });
@@ -121,6 +125,17 @@ export class TasksService {
     });
     await this.logActivity(taskId, userId, 'posted an update');
     return comment;
+  }
+
+  // `push` is an atomic array-append at the database level — safer than
+  // fetching current reactions, appending in application code, and writing
+  // the whole array back, which would drop a concurrent reaction under load.
+  reactToComment(commentId: string, emoji: string) {
+    return this.prisma.comment.update({
+      where: { id: commentId },
+      data: { reactions: { push: emoji } },
+      include: { author: true },
+    });
   }
 
   private logActivity(taskId: string, userId: string, message: string) {

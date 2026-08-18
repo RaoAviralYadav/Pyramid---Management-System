@@ -42,7 +42,7 @@ export function TaskToolbar({
   const [addOpen, setAddOpen] = useState(false);
 
   return (
-    <div className="px-6 pb-3 flex items-center justify-between gap-2 border-b border-border">
+    <div className="px-6 pb-3 flex items-center justify-between gap-2">
       <div className="flex-1" />
       <div className="flex items-center gap-2">
         {searchOpen ? (

@@ -9,6 +9,7 @@ export class CreateTaskDto {
   @IsOptional() @IsString() taskType?: string;
   @IsOptional() @IsString() team?: string;
   @IsOptional() @IsArray() @IsString({ each: true }) labels?: string[];
+  @IsOptional() @IsArray() @IsString({ each: true }) resources?: string[];
   @IsOptional() @IsDateString() startDate?: string;
   @IsOptional() @IsDateString() dueDate?: string;
   @IsOptional() @IsString() projectId?: string;
@@ -23,6 +24,7 @@ export class UpdateTaskDto {
   @IsOptional() @IsString() taskType?: string;
   @IsOptional() @IsString() team?: string;
   @IsOptional() @IsArray() @IsString({ each: true }) labels?: string[];
+  @IsOptional() @IsArray() @IsString({ each: true }) resources?: string[];
   @IsOptional() @IsDateString() startDate?: string;
   @IsOptional() @IsDateString() dueDate?: string;
   @IsOptional() @IsString() projectId?: string;

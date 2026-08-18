@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import {
   DragDropContext,
   Draggable,
@@ -17,6 +18,13 @@ import type { VisibleFields } from './task-toolbar';
 
 const ORDER: TaskStatus[] = ['BACKLOG', 'TODO', 'DOING', 'ON_HOLD', 'COMPLETED'];
 
+function reorder<T>(list: T[], startIndex: number, endIndex: number) {
+  const result = Array.from(list);
+  const [removed] = result.splice(startIndex, 1);
+  result.splice(endIndex, 0, removed);
+  return result;
+}
+
 export function TaskBoard({
   tasks,
   visibleFields,
@@ -28,26 +36,51 @@ export function TaskBoard({
   onMove: (taskId: string, status: TaskStatus) => void;
   onAddTask: (status: TaskStatus, title: string) => void;
 }) {
+  const [order, setOrder] = useState<TaskStatus[]>(ORDER);
+
   function handleDragEnd(result: DropResult) {
-    const { destination, source, draggableId } = result;
+    const { destination, source, draggableId, type } = result;
     if (!destination) return;
+    // Column reorder
+    if (type === 'COLUMN') {
+      if (destination.index === source.index) return;
+      setOrder((o) => reorder(o, source.index, destination.index));
+      return;
+    }
+
+    // Task moved between columns
     if (destination.droppableId === source.droppableId && destination.index === source.index) return;
     onMove(draggableId, destination.droppableId as TaskStatus);
   }
 
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
-      <div className="flex gap-4 h-full overflow-x-auto pb-4">
-        {ORDER.map((status) => (
-          <Column
-            key={status}
-            status={status}
-            tasks={tasks.filter((t) => t.status === status)}
-            visibleFields={visibleFields}
-            onAddTask={(title) => onAddTask(status, title)}
-          />
-        ))}
-      </div>
+      <Droppable droppableId="board-columns" direction="horizontal" type="COLUMN">
+        {(provided) => (
+          <div ref={provided.innerRef} {...provided.droppableProps} className="flex gap-4 h-full overflow-x-auto pb-4">
+            {order.map((status, idx) => (
+              <Draggable key={status} draggableId={status} index={idx}>
+                {(dragProvided) => (
+                  <div
+                    ref={dragProvided.innerRef}
+                    {...dragProvided.draggableProps}
+                    className=""
+                  >
+                    <Column
+                      status={status}
+                      tasks={tasks.filter((t) => t.status === status)}
+                      visibleFields={visibleFields}
+                      onAddTask={(title) => onAddTask(status, title)}
+                      columnDragHandleProps={dragProvided.dragHandleProps}
+                    />
+                  </div>
+                )}
+              </Draggable>
+            ))}
+            {provided.placeholder}
+          </div>
+        )}
+      </Droppable>
     </DragDropContext>
   );
 }
@@ -57,11 +90,13 @@ function Column({
   tasks,
   visibleFields,
   onAddTask,
+  columnDragHandleProps,
 }: {
   status: TaskStatus;
   tasks: Task[];
   visibleFields: VisibleFields;
   onAddTask: (title: string) => void;
+  columnDragHandleProps?: DraggableProvidedDragHandleProps | null | undefined;
 }) {
   const inlineAdd = useInlineAdd(onAddTask);
 
@@ -69,11 +104,27 @@ function Column({
     <div className="flex flex-col w-72 shrink-0">
       <div className="rounded-xl border border-border bg-bg-secondary p-3 flex flex-col">
         <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-fg flex items-center gap-1.5">
-          {STATUS_LABEL[status]}
-          <span className="text-fg-muted font-normal">{tasks.length}</span>
-        </span>
-        <div className="flex items-center gap-0.5">
+          <div className="flex items-center gap-2">
+            <button
+              {...(columnDragHandleProps as any)}
+              aria-label={`Move ${STATUS_LABEL[status]} column`}
+              className="p-1 rounded-sm text-fg-muted hover:text-fg cursor-move"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="5" cy="6" r="1" />
+                <circle cx="5" cy="12" r="1" />
+                <circle cx="5" cy="18" r="1" />
+                <circle cx="11" cy="6" r="1" />
+                <circle cx="11" cy="12" r="1" />
+                <circle cx="11" cy="18" r="1" />
+              </svg>
+            </button>
+            <span className="text-sm font-medium text-fg flex items-center gap-1.5">
+              {STATUS_LABEL[status]}
+              <span className="text-fg-muted font-normal">{tasks.length}</span>
+            </span>
+          </div>
+          <div className="flex items-center gap-0.5">
           <button
             onClick={inlineAdd.start}
             className="h-6 w-6 flex items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg transition-colors"

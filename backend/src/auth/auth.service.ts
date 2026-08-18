@@ -24,14 +24,20 @@ export class AuthService {
   // anyone can explore the app with zero setup.
   async createGuestSession() {
     const suffix = Math.floor(1000 + Math.random() * 9000);
+    const uniqueMarker = `${Date.now()}-${suffix}`;
     const user = await this.prisma.user.create({
       data: {
         isGuest: true,
         fullName: 'Guest',
-        username: `guest${suffix}`,
+        // Make username unlikely to collide by including a timestamp.
+        username: `guest-${uniqueMarker}`,
         // Some MongoDB setups may still have a legacy unique index on googleId.
         // Store a unique guest marker here so multiple guest accounts can be created.
-        googleId: `guest-${Date.now()}-${suffix}`,
+        googleId: `guest-${uniqueMarker}`,
+        // Some databases may still enforce a unique index on `email` from
+        // an older migration. Use a unique, throwaway email to avoid
+        // collisions when creating many guests.
+        email: `guest+${uniqueMarker}@example.local`,
       },
     });
     return { accessToken: this.sign(user.id), user };

@@ -17,7 +17,7 @@ export function ProjectsTable({ projects, onPriorityChange }: { projects: Projec
   }
 
   return (
-    <div className="rounded-xl border border-border overflow-hidden">
+    <div className="rounded-xl border border-border overflow-visible">
       <div className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-4 px-4 py-2 text-xs font-medium text-fg-muted bg-bg-secondary">
         <span>Projects</span>
         <span className="w-24">Priority</span>

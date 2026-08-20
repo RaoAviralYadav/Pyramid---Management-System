@@ -143,7 +143,7 @@ function Column({
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
-            className={`min-h-[80px] max-h-[60vh] p-1.5 flex flex-col gap-2 overflow-y-auto transition-colors ${
+            className={`min-h-[80px] max-h-[60vh] p-1.5 flex flex-col gap-2 overflow-visible transition-colors ${
               snapshot.isDraggingOver ? 'bg-accent-soft/40' : ''
             }`}
           >

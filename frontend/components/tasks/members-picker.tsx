@@ -25,8 +25,19 @@ export function MembersPicker({ task, trigger }: { task: Task; trigger: React.Re
   }
 
   return (
-    <div className="relative inline-block">
-      <button onClick={() => setOpen((o) => !o)}>{trigger}</button>
+    <div
+      className="relative inline-block"
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+      >
+        {trigger}
+      </button>
       <Popover open={open} onClose={() => setOpen(false)} anchorClassName="right-0 top-[calc(100%+4px)] w-52">
         <p className="px-3 pb-1 text-xs font-medium text-fg-muted">Members</p>
         {users.length === 0 && <p className="px-3 py-1.5 text-xs text-fg-muted">Loading…</p>}

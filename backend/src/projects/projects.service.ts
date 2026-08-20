@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProjectDto, UpdateProjectDto } from './dto/project.dto';
 
@@ -30,10 +30,27 @@ export class ProjectsService {
   }
 
   async update(id: string, dto: UpdateProjectDto) {
-    await this.findOne(id);
+    const existing = await this.findOne(id);
+    const nextDueDate = dto.dueDate !== undefined ? (dto.dueDate ? new Date(dto.dueDate) : null) : existing.dueDate;
+
+    if (nextDueDate) {
+      const tasksBeyond = await this.prisma.task.findMany({
+        where: {
+          projectId: id,
+          dueDate: { not: null },
+        },
+        select: { dueDate: true },
+      });
+
+      const tooLate = tasksBeyond.find((task) => task.dueDate && new Date(task.dueDate) > nextDueDate);
+      if (tooLate) {
+        throw new BadRequestException(`Project due date cannot be earlier than a task due date (${new Date(tooLate.dueDate!).toISOString().slice(0, 10)}).`);
+      }
+    }
+
     return this.prisma.project.update({
       where: { id },
-      data: { ...dto, dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined },
+      data: { ...dto, dueDate: nextDueDate ?? undefined },
       include: { lead: true, _count: { select: { tasks: true } } },
     });
   }

@@ -5,13 +5,20 @@ import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import type { TaskStatus } from '@/lib/types';
-import { Avatar, Button, PriorityTag } from '@/components/ui/primitives';
+import { PRIORITIES, type Project, type Priority, type TaskStatus } from '@/lib/types';
+import {
+  Avatar,
+  Popover,
+  PopoverItem,
+  PriorityIcon,
+  PriorityTag,
+  useClickOutside,
+} from '@/components/ui/primitives';
 import { TaskToolbar, type VisibleFields } from '@/components/tasks/task-toolbar';
 import { TaskListView } from '@/components/tasks/task-list-view';
 import { TaskBoard } from '@/components/tasks/task-board';
 import { ProjectActionsMenu } from '@/components/projects/project-actions-menu';
-import { formatDate } from '@/lib/utils';
+import { PRIORITY_LABEL, cn, formatDate } from '@/lib/utils';
 
 export default function ProjectDetailPage() {
   const params = useParams<{ projectId: string }>();
@@ -20,6 +27,9 @@ export default function ProjectDetailPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<TaskStatus[]>([]);
   const [visibleFields, setVisibleFields] = useState<VisibleFields>({ priority: true, members: true, dueDate: true, labels: true });
+  const [openMenu, setOpenMenu] = useState<'priority' | 'lead' | 'date' | null>(null);
+
+  const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: () => api.users.list() });
 
   const { data: project, isLoading: projectLoading } = useQuery({
     queryKey: ['project', params.projectId],
@@ -29,6 +39,18 @@ export default function ProjectDetailPage() {
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ['tasks', { projectId: params.projectId }],
     queryFn: () => api.tasks.list({ projectId: params.projectId }),
+  });
+
+  const updateProject = useMutation({
+    mutationFn: (data: Partial<Project>) => api.projects.update(params.projectId, data),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['project', params.projectId], updated);
+      queryClient.setQueryData(['projects'], (old: Project[] | undefined) =>
+        old ? old.map((p) => (p.id === updated.id ? updated : p)) : old,
+      );
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['project', params.projectId] });
+    },
   });
 
   const createTask = useMutation({
@@ -86,21 +108,87 @@ export default function ProjectDetailPage() {
 
               <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <InfoField label="Priority">
-                  <PriorityTag priority={project.priority} />
+                  <div className="relative">
+                    <button
+                      onClick={() => setOpenMenu(openMenu === 'priority' ? null : 'priority')}
+                      className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-sm hover:bg-hover transition-colors"
+                    >
+                      <PriorityTag priority={project.priority} />
+                    </button>
+                    <Popover open={openMenu === 'priority'} onClose={() => setOpenMenu(null)} anchorClassName="left-0 top-[calc(100%+6px)] w-44">
+                      {PRIORITIES.map((p) => (
+                        <PopoverItem
+                          key={p}
+                          onClick={() => {
+                            updateProject.mutate({ priority: p });
+                            setOpenMenu(null);
+                          }}
+                        >
+                          <PriorityIcon priority={p} /> {PRIORITY_LABEL[p]}
+                          {project.priority === p && <CheckIcon />}
+                        </PopoverItem>
+                      ))}
+                    </Popover>
+                  </div>
                 </InfoField>
+
                 <InfoField label="Team lead">
-                  {project.lead ? (
-                    <span className="inline-flex items-center gap-2 text-sm text-fg">
-                      <Avatar user={project.lead} size={22} />
-                      {project.lead.fullName || project.lead.username || 'Lead'}
-                    </span>
-                  ) : (
-                    <span className="text-fg-muted">Unassigned</span>
-                  )}
+                  <div className="relative">
+                    <button
+                      onClick={() => setOpenMenu(openMenu === 'lead' ? null : 'lead')}
+                      className="inline-flex items-center gap-2 rounded-md px-1.5 py-1 text-left text-sm hover:bg-hover transition-colors"
+                    >
+                      {project.lead ? (
+                        <>
+                          <Avatar user={project.lead} size={22} />
+                          <span className="text-fg">{project.lead.fullName || project.lead.username || 'Lead'}</span>
+                        </>
+                      ) : (
+                        <span className="text-fg-muted">Unassigned</span>
+                      )}
+                    </button>
+                    <Popover open={openMenu === 'lead'} onClose={() => setOpenMenu(null)} anchorClassName="left-0 top-[calc(100%+6px)] w-56">
+                      {users.map((user) => {
+                        const active = project.leadId === user.id;
+                        return (
+                          <PopoverItem
+                            key={user.id}
+                            onClick={() => {
+                              updateProject.mutate({ leadId: active ? null : user.id });
+                              setOpenMenu(null);
+                            }}
+                          >
+                            <Avatar user={user} size={20} />
+                            <span className="flex-1 truncate">{user.fullName || user.username}</span>
+                            {active && <CheckIcon />}
+                          </PopoverItem>
+                        );
+                      })}
+                    </Popover>
+                  </div>
                 </InfoField>
+
                 <InfoField label="Due date">
-                  <span className="text-sm text-fg-muted">{formatDate(project.dueDate) ?? '—'}</span>
+                  <div className="relative">
+                    <button
+                      onClick={() => setOpenMenu(openMenu === 'date' ? null : 'date')}
+                      className="rounded-md px-1.5 py-1 text-sm text-fg-muted hover:bg-hover hover:text-fg transition-colors"
+                    >
+                      {formatDate(project.dueDate) ?? 'No due date'}
+                    </button>
+                    {openMenu === 'date' && (
+                      <DatePickerPopover
+                        value={project.dueDate ?? ''}
+                        onChange={(value) => {
+                          updateProject.mutate({ dueDate: value || null });
+                          setOpenMenu(null);
+                        }}
+                        onClose={() => setOpenMenu(null)}
+                      />
+                    )}
+                  </div>
                 </InfoField>
+
                 <InfoField label="Tasks">
                   <span className="text-sm text-fg-muted">{project._count?.tasks ?? tasks.length} total</span>
                 </InfoField>
@@ -149,6 +237,52 @@ function InfoField({ label, children }: { label: string; children: React.ReactNo
     <div className="rounded-xl border border-border bg-bg-secondary p-3">
       <p className="text-[11px] uppercase tracking-[0.12em] text-fg-muted">{label}</p>
       <div className="mt-2">{children}</div>
+    </div>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="text-accent ml-auto shrink-0">
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+
+function DatePickerPopover({ value, onChange, onClose }: { value: string; onChange: (value: string) => void; onClose: () => void }) {
+  const ref = useClickOutside<HTMLDivElement>(onClose);
+  const [date, setDate] = useState(value || '');
+
+  return (
+    <div ref={ref} className="absolute left-0 top-[calc(100%+6px)] z-50 rounded-xl border border-border bg-card shadow-popover p-3">
+      <input
+        type="date"
+        value={date}
+        onChange={(e) => setDate(e.target.value)}
+        className="h-9 rounded-lg border border-border bg-bg px-2 text-sm text-fg focus:outline-none"
+      />
+      <div className="mt-3 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            onChange('');
+            onClose();
+          }}
+          className="h-8 px-2.5 rounded-lg text-xs text-fg-muted hover:bg-hover transition-colors"
+        >
+          Clear
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            onChange(date);
+            onClose();
+          }}
+          className="h-8 px-2.5 rounded-lg bg-fg text-bg text-xs font-medium hover:opacity-90 transition-opacity"
+        >
+          Save
+        </button>
+      </div>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaskDto, UpdateTaskDto, QueryTaskDto } from './dto/task.dto';
@@ -43,16 +43,26 @@ export class TasksService {
     return task;
   }
 
-  create(dto: CreateTaskDto, userId: string) {
+  async create(dto: CreateTaskDto, userId: string) {
     const { assigneeIds, dueDate, startDate, ...rest } = dto;
+    const finalDueDate = dueDate ? new Date(dueDate) : undefined;
     // Every card in the reference design shows an assignee — default to
     // whoever created the task rather than leaving it blank; they can
     // always reassign it from the Details panel afterward.
     const finalAssigneeIds = assigneeIds && assigneeIds.length > 0 ? assigneeIds : [userId];
+    const projectId = dto.projectId;
+
+    if (projectId) {
+      const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+      if (project?.dueDate && finalDueDate && finalDueDate > new Date(project.dueDate)) {
+        throw new BadRequestException(`Task due date cannot be after the project due date (${project.dueDate.toISOString().slice(0, 10)}).`);
+      }
+    }
+
     return this.prisma.task.create({
       data: {
         ...rest,
-        dueDate: dueDate ? new Date(dueDate) : undefined,
+        dueDate: finalDueDate,
         startDate: startDate ? new Date(startDate) : undefined,
         reporterId: userId,
         assignees: { connect: finalAssigneeIds.map((id) => ({ id })) },
@@ -65,11 +75,21 @@ export class TasksService {
     const existing = await this.findOne(id);
 
     const { assigneeIds, dueDate, startDate, ...rest } = dto;
+    const finalDueDate = dueDate !== undefined ? (dueDate ? new Date(dueDate) : null) : existing.dueDate ?? null;
+    const projectId = dto.projectId ?? existing.projectId ?? null;
+
+    if (projectId) {
+      const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+      if (project?.dueDate && finalDueDate && new Date(finalDueDate) > new Date(project.dueDate)) {
+        throw new BadRequestException(`Task due date cannot be after the project due date (${project.dueDate.toISOString().slice(0, 10)}).`);
+      }
+    }
+
     const task = await this.prisma.task.update({
       where: { id },
       data: {
         ...rest,
-        dueDate: dueDate ? new Date(dueDate) : undefined,
+        dueDate: dueDate !== undefined ? (dueDate ? new Date(dueDate) : null) : existing.dueDate ?? null,
         startDate: startDate ? new Date(startDate) : undefined,
         assignees: assigneeIds ? { set: assigneeIds.map((aid) => ({ id: aid })) } : undefined,
       },

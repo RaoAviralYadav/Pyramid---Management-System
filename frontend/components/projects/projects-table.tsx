@@ -1,11 +1,13 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { Avatar, PriorityTag } from '@/components/ui/primitives';
 import type { Project, Priority } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 import { ProjectActionsMenu } from './project-actions-menu';
 
 export function ProjectsTable({ projects, onPriorityChange }: { projects: Project[]; onPriorityChange: (id: string, priority: Priority) => void }) {
+  const router = useRouter();
 
   if (projects.length === 0) {
     return (
@@ -28,7 +30,8 @@ export function ProjectsTable({ projects, onPriorityChange }: { projects: Projec
       {projects.map((p) => (
         <div
           key={p.id}
-          className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-4 px-4 py-3 border-t border-border text-sm hover:bg-hover transition-colors"
+          onClick={() => router.push(`/projects/${p.id}`)}
+          className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-4 px-4 py-3 border-t border-border text-sm hover:bg-hover cursor-pointer transition-colors"
         >
           <div className="min-w-0">
             <p className="text-fg truncate">{p.name}</p>

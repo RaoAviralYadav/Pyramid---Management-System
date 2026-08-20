@@ -82,14 +82,6 @@ export default function ProjectDetailPage() {
                   <p className="text-xs uppercase tracking-[0.14em] text-fg-muted">Project</p>
                   <h1 className="mt-1 text-2xl font-semibold text-fg">{project.name}</h1>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="secondary" size="sm" onClick={() => setView('list')}>
-                    List
-                  </Button>
-                  <Button variant="secondary" size="sm" onClick={() => setView('board')}>
-                    Board
-                  </Button>
-                </div>
               </div>
 
               <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
